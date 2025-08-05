@@ -1,17 +1,25 @@
-export const handler = async (req, res) => {
+export default async function handler(req, res) {
   try {
     const API_KEY = process.env.OPENWEATHER_API_KEY;
     
+    // Verifica que la API key exista
     if (!API_KEY) {
       console.error('ERROR: API_KEY no configurada');
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ 
-          error: 'Configuración incompleta',
-          details: 'API key no configurada en variables de entorno',
-          timestamp: new Date().toISOString()
-        })
-      };
+      return res.status(500).json({
+        error: 'Configuración incompleta',
+        details: 'API key no configurada en variables de entorno',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Verifica que la API key tenga 32 caracteres
+    if (API_KEY.length !== 32) {
+      console.error('ERROR: API_KEY longitud incorrecta', API_KEY.length);
+      return res.status(500).json({
+        error: 'Configuración incorrecta',
+        details: 'La API key debe tener 32 caracteres',
+        timestamp: new Date().toISOString()
+      });
     }
     
     const CITY = 'Monterrey';
@@ -22,24 +30,39 @@ export const handler = async (req, res) => {
     
     const response = await fetch(apiUrl);
     
-    // Verifica si la respuesta es OK (código 200)
+    // Manejo seguro de errores de la API
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorBody;
+      try {
+        errorBody = await response.json();
+      } catch (e) {
+        try {
+          errorBody = { message: await response.text() };
+        } catch (e2) {
+          errorBody = { message: 'Error desconocido al obtener datos climáticos' };
+        }
+      }
+      
       console.error('Error de la API:', {
         status: response.status,
         statusText: response.statusText,
-        body: errorText
+        body: errorBody
       });
       
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ 
-          error: 'Error de la API',
-          details: `HTTP ${response.status}: ${response.statusText}`,
-          response: errorText,
+      // Maneja específicamente el error 401
+      if (response.status === 401) {
+        return res.status(401).json({
+          error: 'API key inválida',
+          details: 'Verifica tu API key en OpenWeatherMap',
           timestamp: new Date().toISOString()
-        })
-      };
+        });
+      }
+      
+      return res.status(response.status).json({
+        error: 'Error de la API',
+        details: errorBody.message || response.statusText,
+        timestamp: new Date().toISOString()
+      });
     }
     
     // Parsea la respuesta como JSON
@@ -48,14 +71,11 @@ export const handler = async (req, res) => {
     // Verifica que los datos tengan la estructura esperada
     if (!data.main || !data.wind || !data.weather || !data.weather[0]) {
       console.error('Estructura de datos inesperada:', data);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ 
-          error: 'Datos inesperados',
-          details: 'La respuesta de la API no tiene la estructura esperada',
-          timestamp: new Date().toISOString()
-        })
-      };
+      return res.status(500).json({
+        error: 'Datos inesperados',
+        details: 'La respuesta de la API no tiene la estructura esperada',
+        timestamp: new Date().toISOString()
+      });
     }
     
     // Procesa los datos
@@ -67,21 +87,16 @@ export const handler = async (req, res) => {
       timestamp: new Date().toISOString()
     };
     
-    return {
-      statusCode: 200,
-      body: JSON.stringify(processedData)
-    };
+    // Devuelve la respuesta en el formato correcto para Vercel
+    res.status(200).json(processedData);
     
   } catch (error) {
     console.error('Error FATAL en la función:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ 
-        error: 'Error interno del servidor',
-        details: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      })
-    };
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      details: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
   }
-};
+}

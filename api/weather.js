@@ -1,27 +1,37 @@
 export const handler = async (req, res) => {
   try {
     const API_KEY = process.env.OPENWEATHER_API_KEY;
-    console.log('API Key:', API_KEY ? 'Existe' : 'NO EXISTE');
     
+    // Verifica que la API key exista
     if (!API_KEY) {
-      throw new Error('API key no configurada en las variables de entorno');
+      console.error('API key no configurada en las variables de entorno');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          error: 'Configuración incompleta', 
+          details: 'API key no configurada',
+          timestamp: new Date().toISOString()
+        })
+      };
     }
     
     const CITY = 'Monterrey';
     const COUNTRY_CODE = 'MX';
     
+    // Construye la URL de la API
     const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${CITY},${COUNTRY_CODE}&appid=${API_KEY}&units=metric&lang=es`;
     console.log('URL de la API:', apiUrl.replace(API_KEY, '***REDACTED***'));
     
+    // Realiza la solicitud
     const response = await fetch(apiUrl);
     
     // Manejo seguro de la respuesta
     let responseBody;
     try {
-      // Intentamos parsear como JSON
+      // Intenta parsear como JSON
       responseBody = await response.json();
     } catch (e) {
-      // Si falla, intentamos obtener como texto
+      // Si falla, intenta obtener como texto
       try {
         responseBody = { message: await response.text() };
       } catch (e2) {
@@ -29,6 +39,7 @@ export const handler = async (req, res) => {
       }
     }
     
+    // Si la respuesta no es OK
     if (!response.ok) {
       console.error('Error de la API:', {
         status: response.status,
@@ -36,12 +47,27 @@ export const handler = async (req, res) => {
         body: responseBody
       });
       
-      // Manejamos específicamente el error 401
+      // Maneja específicamente el error 401
       if (response.status === 401) {
-        throw new Error('API key inválida o no autorizada. Verifica tu API key en OpenWeatherMap.');
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ 
+            error: 'API key inválida',
+            details: 'Verifica tu API key en OpenWeatherMap y asegúrate de que tu cuenta esté confirmada por email',
+            timestamp: new Date().toISOString()
+          })
+        };
       }
       
-      throw new Error(`Error de la API: ${response.status} - ${responseBody.message || response.statusText}`);
+      // Maneja otros errores
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ 
+          error: 'Error de la API',
+          details: responseBody.message || response.statusText,
+          timestamp: new Date().toISOString()
+        })
+      };
     }
     
     // Procesa los datos para enviar solo lo necesario al frontend
@@ -59,13 +85,14 @@ export const handler = async (req, res) => {
     };
     
   } catch (error) {
-    console.error('Error en la función de clima:', error);
+    console.error('Error FATAL en la función de clima:', error);
     
     return {
       statusCode: 500,
       body: JSON.stringify({ 
         error: 'Error interno del servidor',
-        details: error.message,
+        details: error.message || 'Error desconocido',
+        stack: error.stack,
         timestamp: new Date().toISOString()
       })
     };

@@ -1,4 +1,18 @@
 export default async function handler(req, res) {
+  // Configuración de CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  // O para mayor seguridad, reemplaza * con tu dominio específico:
+  // res.setHeader('Access-Control-Allow-Origin', 'https://tudominio.com');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // Manejo de solicitudes OPTIONS (preflight)
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   try {
     const API_KEY = process.env.OPENWEATHER_API_KEY;
     
@@ -87,7 +101,7 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     };
     
-    // Devuelve la respuesta en el formato correcto para Vercel
+    // Devuelve la respuesta
     res.status(200).json(processedData);
     
   } catch (error) {

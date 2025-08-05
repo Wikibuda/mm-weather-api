@@ -4,7 +4,7 @@ export const handler = async (req, res) => {
     console.log('API Key:', API_KEY ? 'Existe' : 'NO EXISTE');
     
     if (!API_KEY) {
-      throw new Error('API key no configurada');
+      throw new Error('API key no configurada en las variables de entorno');
     }
     
     const CITY = 'Monterrey';
@@ -15,17 +15,17 @@ export const handler = async (req, res) => {
     
     const response = await fetch(apiUrl);
     
-    // Manejo seguro de la respuesta de error
-    let errorData = {};
+    // Manejo seguro de la respuesta
+    let responseBody;
     try {
       // Intentamos parsear como JSON
-      errorData = await response.json();
+      responseBody = await response.json();
     } catch (e) {
-      // Si no es JSON válido, usamos texto plano
+      // Si falla, intentamos obtener como texto
       try {
-        errorData.message = await response.text();
+        responseBody = { message: await response.text() };
       } catch (e2) {
-        errorData.message = 'Error desconocido al obtener datos climáticos';
+        responseBody = { message: 'Error desconocido al obtener datos climáticos' };
       }
     }
     
@@ -33,7 +33,7 @@ export const handler = async (req, res) => {
       console.error('Error de la API:', {
         status: response.status,
         statusText: response.statusText,
-        body: errorData
+        body: responseBody
       });
       
       // Manejamos específicamente el error 401
@@ -41,19 +41,18 @@ export const handler = async (req, res) => {
         throw new Error('API key inválida o no autorizada. Verifica tu API key en OpenWeatherMap.');
       }
       
-      throw new Error(`Error de la API: ${response.status} - ${errorData.message || response.statusText}`);
+      throw new Error(`Error de la API: ${response.status} - ${responseBody.message || response.statusText}`);
     }
     
     // Procesa los datos para enviar solo lo necesario al frontend
     const processedData = {
-      temperature: Math.round(response.data.main.temp),
-      humidity: response.data.main.humidity,
-      windSpeed: Math.round(response.data.wind.speed * 3.6),
-      weatherId: response.data.weather[0].id,
+      temperature: Math.round(responseBody.main.temp),
+      humidity: responseBody.main.humidity,
+      windSpeed: Math.round(responseBody.wind.speed * 3.6), // Convertir m/s a km/h
+      weatherId: responseBody.weather[0].id,
       timestamp: new Date().toISOString()
     };
     
-    // Devuelve los datos procesados
     return {
       statusCode: 200,
       body: JSON.stringify(processedData)

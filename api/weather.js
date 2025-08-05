@@ -3,6 +3,10 @@ export const handler = async (req, res) => {
     const API_KEY = process.env.OPENWEATHER_API_KEY;
     console.log('API Key:', API_KEY ? 'Existe' : 'NO EXISTE');
     
+    if (!API_KEY) {
+      throw new Error('API key no configurada');
+    }
+    
     const CITY = 'Monterrey';
     const COUNTRY_CODE = 'MX';
     
@@ -11,36 +15,60 @@ export const handler = async (req, res) => {
     
     const response = await fetch(apiUrl);
     
+    // Manejo seguro de la respuesta de error
+    let errorData = {};
+    try {
+      // Intentamos parsear como JSON
+      errorData = await response.json();
+    } catch (e) {
+      // Si no es JSON válido, usamos texto plano
+      try {
+        errorData.message = await response.text();
+      } catch (e2) {
+        errorData.message = 'Error desconocido al obtener datos climáticos';
+      }
+    }
+    
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Respuesta de error:', {
+      console.error('Error de la API:', {
         status: response.status,
         statusText: response.statusText,
         body: errorData
       });
-      throw new Error(`Error de la API: ${response.status}`);
+      
+      // Manejamos específicamente el error 401
+      if (response.status === 401) {
+        throw new Error('API key inválida o no autorizada. Verifica tu API key en OpenWeatherMap.');
+      }
+      
+      throw new Error(`Error de la API: ${response.status} - ${errorData.message || response.statusText}`);
     }
-    
-    const data = await response.json();
     
     // Procesa los datos para enviar solo lo necesario al frontend
     const processedData = {
-      temperature: Math.round(data.main.temp),
-      humidity: data.main.humidity,
-      windSpeed: Math.round(data.wind.speed * 3.6),
-      weatherId: data.weather[0].id,
+      temperature: Math.round(response.data.main.temp),
+      humidity: response.data.main.humidity,
+      windSpeed: Math.round(response.data.wind.speed * 3.6),
+      weatherId: response.data.weather[0].id,
       timestamp: new Date().toISOString()
     };
     
     // Devuelve los datos procesados
-    res.status(200).json(processedData);
+    return {
+      statusCode: 200,
+      body: JSON.stringify(processedData)
+    };
     
   } catch (error) {
     console.error('Error en la función de clima:', error);
-    res.status(500).json({ 
-      error: 'Error al obtener datos climáticos',
-      details: error.message,
-      timestamp: new Date().toISOString()
-    });
+    
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ 
+        error: 'Error interno del servidor',
+        details: error.message,
+        timestamp: new Date().toISOString()
+      })
+    };
   }
 };

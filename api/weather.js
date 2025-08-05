@@ -2,14 +2,13 @@ export const handler = async (req, res) => {
   try {
     const API_KEY = process.env.OPENWEATHER_API_KEY;
     
-    // Verifica que la API key exista
     if (!API_KEY) {
-      console.error('API key no configurada en las variables de entorno');
+      console.error('ERROR: API_KEY no configurada');
       return {
         statusCode: 500,
         body: JSON.stringify({ 
-          error: 'Configuración incompleta', 
-          details: 'API key no configurada',
+          error: 'Configuración incompleta',
+          details: 'API key no configurada en variables de entorno',
           timestamp: new Date().toISOString()
         })
       };
@@ -18,64 +17,53 @@ export const handler = async (req, res) => {
     const CITY = 'Monterrey';
     const COUNTRY_CODE = 'MX';
     
-    // Construye la URL de la API
     const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${CITY},${COUNTRY_CODE}&appid=${API_KEY}&units=metric&lang=es`;
     console.log('URL de la API:', apiUrl.replace(API_KEY, '***REDACTED***'));
     
-    // Realiza la solicitud
     const response = await fetch(apiUrl);
     
-    // Manejo seguro de la respuesta
-    let responseBody;
-    try {
-      // Intenta parsear como JSON
-      responseBody = await response.json();
-    } catch (e) {
-      // Si falla, intenta obtener como texto
-      try {
-        responseBody = { message: await response.text() };
-      } catch (e2) {
-        responseBody = { message: 'Error desconocido al obtener datos climáticos' };
-      }
-    }
-    
-    // Si la respuesta no es OK
+    // Verifica si la respuesta es OK (código 200)
     if (!response.ok) {
+      const errorText = await response.text();
       console.error('Error de la API:', {
         status: response.status,
         statusText: response.statusText,
-        body: responseBody
+        body: errorText
       });
       
-      // Maneja específicamente el error 401
-      if (response.status === 401) {
-        return {
-          statusCode: 401,
-          body: JSON.stringify({ 
-            error: 'API key inválida',
-            details: 'Verifica tu API key en OpenWeatherMap y asegúrate de que tu cuenta esté confirmada por email',
-            timestamp: new Date().toISOString()
-          })
-        };
-      }
-      
-      // Maneja otros errores
       return {
         statusCode: response.status,
         body: JSON.stringify({ 
           error: 'Error de la API',
-          details: responseBody.message || response.statusText,
+          details: `HTTP ${response.status}: ${response.statusText}`,
+          response: errorText,
           timestamp: new Date().toISOString()
         })
       };
     }
     
-    // Procesa los datos para enviar solo lo necesario al frontend
+    // Parsea la respuesta como JSON
+    const data = await response.json();
+    
+    // Verifica que los datos tengan la estructura esperada
+    if (!data.main || !data.wind || !data.weather || !data.weather[0]) {
+      console.error('Estructura de datos inesperada:', data);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          error: 'Datos inesperados',
+          details: 'La respuesta de la API no tiene la estructura esperada',
+          timestamp: new Date().toISOString()
+        })
+      };
+    }
+    
+    // Procesa los datos
     const processedData = {
-      temperature: Math.round(responseBody.main.temp),
-      humidity: responseBody.main.humidity,
-      windSpeed: Math.round(responseBody.wind.speed * 3.6), // Convertir m/s a km/h
-      weatherId: responseBody.weather[0].id,
+      temperature: Math.round(data.main.temp),
+      humidity: data.main.humidity,
+      windSpeed: Math.round(data.wind.speed * 3.6), // Convertir m/s a km/h
+      weatherId: data.weather[0].id,
       timestamp: new Date().toISOString()
     };
     
@@ -85,13 +73,12 @@ export const handler = async (req, res) => {
     };
     
   } catch (error) {
-    console.error('Error FATAL en la función de clima:', error);
-    
+    console.error('Error FATAL en la función:', error);
     return {
       statusCode: 500,
       body: JSON.stringify({ 
         error: 'Error interno del servidor',
-        details: error.message || 'Error desconocido',
+        details: error.message,
         stack: error.stack,
         timestamp: new Date().toISOString()
       })

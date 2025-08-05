@@ -1,15 +1,17 @@
 export default async function handler(req, res) {
-  // Configuración CRÍTICA de CORS
+  // Configuración COMPLETA de CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin'); // ¡CRÍTICO para evitar problemas de caché de CORS!
   
   // Manejo de solicitudes OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
-  
+
   try {
     const API_KEY = process.env.OPENWEATHER_API_KEY;
     

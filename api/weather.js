@@ -1,10 +1,10 @@
 export default async function handler(req, res) {
-  // Configuración COMPLETA de CORS
+  // Configuración completa de CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Vary', 'Origin'); // ¡CRÍTICO para evitar problemas de caché de CORS!
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control'); // AGREGA Cache-Control
+  res.setHeader('Access-Control-Max-Age', '86400'); // Para caché de CORS
+  res.setHeader('Vary', 'Origin'); // Esencial para evitar problemas de caché
   
   // Manejo de solicitudes OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
@@ -81,21 +81,11 @@ export default async function handler(req, res) {
     // Parsea la respuesta como JSON
     const data = await response.json();
     
-    // Verifica que los datos tengan la estructura esperada
-    if (!data.main || !data.wind || !data.weather || !data.weather[0]) {
-      console.error('Estructura de datos inesperada:', data);
-      return res.status(500).json({
-        error: 'Datos inesperados',
-        details: 'La respuesta de la API no tiene la estructura esperada',
-        timestamp: new Date().toISOString()
-      });
-    }
-    
     // Procesa los datos
     const processedData = {
       temperature: Math.round(data.main.temp),
       humidity: data.main.humidity,
-      windSpeed: Math.round(data.wind.speed * 3.6), // Convertir m/s a km/h
+      windSpeed: Math.round(data.wind.speed * 3.6),
       weatherId: data.weather[0].id,
       timestamp: new Date().toISOString()
     };

@@ -5,6 +5,8 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control'); // AGREGA Cache-Control
   res.setHeader('Access-Control-Max-Age', '86400'); // Para caché de CORS
   res.setHeader('Vary', 'Origin'); // Esencial para evitar problemas de caché
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
   
   // Manejo de solicitudes OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
@@ -74,6 +76,76 @@ export default async function handler(req, res) {
       return res.status(response.status).json({
         error: 'Error de la API',
         details: errorBody.message || response.statusText,
+    
+    // Verifica que la API key exista
+    if (!API_KEY) {
+      console.error('ERROR: API_KEY no configurada');
+      return res.status(500).json({
+        error: 'Configuración incompleta',
+        details: 'API key no configurada en variables de entorno',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Verifica que la API key tenga 32 caracteres
+    if (API_KEY.length !== 32) {
+      console.error('ERROR: API_KEY longitud incorrecta', API_KEY.length);
+      return res.status(500).json({
+        error: 'Configuración incorrecta',
+        details: 'La API key debe tener 32 caracteres',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Obtener parámetros de la URL
+    const { lat, lon } = req.query;
+    
+    let apiUrl;
+    
+    // Si hay coordenadas, usarlas; si no, usar Monterrey por defecto
+    if (lat && lon) {
+      console.log(`Obteniendo clima para coordenadas: ${lat}, ${lon}`);
+      apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=es`;
+    } else {
+      console.log('Obteniendo clima para Monterrey por defecto');
+      const CITY = 'Monterrey';
+      const COUNTRY_CODE = 'MX';
+      apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${CITY},${COUNTRY_CODE}&appid=${API_KEY}&units=metric&lang=es`;
+    }
+    
+    const response = await fetch(apiUrl);
+    
+    // Manejo seguro de errores de la API
+    if (!response.ok) {
+      let errorBody;
+      try {
+        errorBody = await response.json();
+      } catch (e) {
+        try {
+          errorBody = { message: await response.text() };
+        } catch (e2) {
+          errorBody = { message: 'Error desconocido al obtener datos climáticos' };
+        }
+      }
+      
+      console.error('Error de la API:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody
+      });
+      
+      // Maneja específicamente el error 401
+      if (response.status === 401) {
+        return res.status(401).json({
+          error: 'API key inválida',
+          details: 'Verifica tu API key en OpenWeatherMap',
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      return res.status(response.status).json({
+        error: 'Error de la API',
+        details: errorBody.message || response.statusText,
         timestamp: new Date().toISOString()
       });
     }
@@ -86,6 +158,7 @@ export default async function handler(req, res) {
       temperature: Math.round(data.main.temp),
       humidity: data.main.humidity,
       windSpeed: Math.round(data.wind.speed * 3.6),
+      altitude: data.coord ? Math.round(data.main.grnd_level || data.main.sea_level || 0) : 540,
       weatherId: data.weather[0].id,
       timestamp: new Date().toISOString()
     };

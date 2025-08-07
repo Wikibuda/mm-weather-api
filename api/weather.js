@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   // Configuración completa de CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control'); // ¡IMPORTANTE! Agregamos Cache-Control aquí
   res.setHeader('Vary', 'Origin');
   
   // Manejo de solicitudes OPTIONS (preflight)

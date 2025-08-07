@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     
     let apiUrl;
     
-    // Si hay coordenadas, usar el endpoint tradicional (v2.5)
+    // Si hay coordenadas, usar el endpoint tradicional (v2.5) para clima actual
     if (lat && lon) {
       console.log(`Obteniendo clima para coordenadas: ${lat}, ${lon} usando endpoint tradicional`);
       apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=es`;
@@ -93,21 +93,19 @@ export default async function handler(req, res) {
     // Procesa los datos - CORRECCIÓN DE ALTITUD
     let altitude;
     
-    // Calcular la altitud aproximada desde la presión atmosférica usando fórmula barométrica precisa
+    // Calcular la altitud aproximada desde la presión atmosférica
     if (data.main && (data.main.grnd_level || data.main.sea_level)) {
       const pressure = data.main.grnd_level || data.main.sea_level || 1013.25;
       const seaLevelPressure = 1013.25; // Presión estándar al nivel del mar en hPa
       
       // Fórmula BAROMÉTRICA PRECISA (más exacta para altitudes moderadas)
-      // Altitud (m) = 44330 * (1 - (presión / presión_al_nivel_del_mar) ^ 0.190284)
       const calculatedAltitude = 44330 * (1 - Math.pow(pressure / seaLevelPressure, 0.190284));
       
       console.log(`Presión atmosférica: ${pressure} hPa`);
       console.log(`Altitud calculada (fórmula precisa): ${calculatedAltitude.toFixed(2)} msnm`);
       
-      // Aplicar un factor de corrección para Monterrey (ajuste empírico)
-      // Esto ajusta la altitud calculada para que coincida con los 540 msnm reales
-      const correctionFactor = 0.85; // Factor empírico para Monterrey
+      // Aplicar un factor de corrección empírico para Monterrey (ajuste para 540 msnm)
+      const correctionFactor = 0.85;
       altitude = Math.round(calculatedAltitude * correctionFactor);
       
       console.log(`Altitud ajustada: ${altitude} msnm`);
@@ -123,12 +121,44 @@ export default async function handler(req, res) {
       console.log(`Altitud por defecto para Monterrey: ${altitude} msnm`);
     }
     
+    // Obtener pronóstico para calcular temperatura mínima y máxima
+    let minTemperature, maxTemperature;
+    
+    try {
+      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${data.coord.lat}&lon=${data.coord.lon}&appid=${API_KEY}&units=metric&cnt=8`;
+      const forecastResponse = await fetch(forecastUrl);
+      
+      if (forecastResponse.ok) {
+        const forecastData = await forecastResponse.json();
+        
+        // Obtener las temperaturas de las próximas 24 horas
+        const temperatures = forecastData.list.slice(0, 8).map(item => item.main.temp);
+        
+        // Calcular temperatura mínima y máxima
+        minTemperature = Math.min(...temperatures);
+        maxTemperature = Math.max(...temperatures);
+        
+        console.log(`Temperatura mínima pronosticada: ${minTemperature.toFixed(1)}°C`);
+        console.log(`Temperatura máxima pronosticada: ${maxTemperature.toFixed(1)}°C`);
+      } else {
+        console.warn('No se pudo obtener pronóstico, usando valores predeterminados');
+        minTemperature = data.main.temp - 2;
+        maxTemperature = data.main.temp + 2;
+      }
+    } catch (error) {
+      console.error('Error al obtener pronóstico:', error);
+      minTemperature = data.main.temp - 2;
+      maxTemperature = data.main.temp + 2;
+    }
+    
     // Preparar la respuesta
     const processedData = {
       temperature: Math.round(data.main.temp),
       humidity: data.main.humidity,
       altitude: altitude,
       weatherId: data.weather[0].id,
+      minTemperature: Math.round(minTemperature),
+      maxTemperature: Math.round(maxTemperature),
       timestamp: new Date().toISOString()
     };
     
